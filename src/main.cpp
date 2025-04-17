@@ -6,24 +6,23 @@
 
 DHT dht(DHTPIN, DHTTYPE);
 
-void setup()
-{
-  // Inicializa a comunicação serial
-  Serial.begin(115200);
-  // Inicia o sensor DHT
-  dht.begin();
+const int BUFFER_SIZE = 60; // Último 1 minuto (2s por leitura)
+float humidityBuf[BUFFER_SIZE] = {0};
+float tempBuf[BUFFER_SIZE] = {0};
+int bufIndex = 0;
+int sampleCount = 0;
+unsigned long lastPrintTime = 0; // Controle para impressão a cada 1 minuto
 
-  delay(1000);
+// Função para ler os dados do sensor
+void readSensorData(float &humidity, float &temperature)
+{
+  humidity = dht.readHumidity();
+  temperature = dht.readTemperature();
 }
 
-void loop()
+// Função para exibir os dados do sensor
+void printSensorData(float humidity, float temperature)
 {
-  // Leitura da umidade (%)
-  float humidity = dht.readHumidity();
-  // Leitura da temperatura em Celsius
-  float temperature = dht.readTemperature();
-
-  // Verifica se houve erro na leitura (retorno é NAN em caso de erro)
   if (isnan(humidity) || isnan(temperature))
   {
     Serial.println("Falha na leitura do sensor!");
@@ -37,7 +36,56 @@ void loop()
     Serial.print(temperature);
     Serial.println(" *C");
   }
+}
 
-  // Aguarda 2 segundos entre as leituras
-  delay(2000);
+void setup()
+{
+  // Inicializa a comunicação serial
+  Serial.begin(115200);
+  // Inicia o sensor DHT
+  dht.begin();
+
+  delay(1000);
+}
+
+void loop()
+{
+  float humidity, temperature;
+  readSensorData(humidity, temperature);
+
+  // Se leitura válida, atualiza os buffers
+  if (!isnan(humidity) && !isnan(temperature))
+  {
+    humidityBuf[bufIndex] = humidity;
+    tempBuf[bufIndex] = temperature;
+    bufIndex = (bufIndex + 1) % BUFFER_SIZE;
+    if (sampleCount < BUFFER_SIZE)
+      sampleCount++;
+  }
+
+  // Calcula as médias das últimas amostras
+  float sumH = 0, sumT = 0;
+  for (int i = 0; i < sampleCount; i++)
+  {
+    sumH += humidityBuf[i];
+    sumT += tempBuf[i];
+  }
+  float avgH = (sampleCount > 0) ? (sumH / sampleCount) : NAN;
+  float avgT = (sampleCount > 0) ? (sumT / sampleCount) : NAN;
+
+  // Imprimir somente a média móvel a cada 1 minuto
+  if (millis() - lastPrintTime >= 60000)
+  {
+    Serial.println("Média móvel (último 1 minuto): ");
+    Serial.println("-------------------------------------------------");
+    Serial.print("Umidade: ");
+    Serial.print(avgH);
+    Serial.print(" %\tTemperatura: ");
+    Serial.print(avgT);
+    Serial.println(" *C");
+    lastPrintTime = millis();
+  }
+
+  // Aguarda 1 segundos entre as leituras
+  delay(1000);
 }
