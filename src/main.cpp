@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <DHT.h>
+#include <time.h>
+#include <WiFi.h>
 
 #define DHTPIN 4      // Pino digital conectado ao sensor
 #define DHTTYPE DHT22 // DHT 22 (AM2302). Para DHT11, use DHT11
@@ -38,10 +40,49 @@ void printSensorData(float humidity, float temperature)
   }
 }
 
+void printMediaTimestamp()
+{
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo))
+  {
+    char timeBuffer[32];
+    // Formata a string para: Media (HH:MM -- dd/mm)
+    strftime(timeBuffer, sizeof(timeBuffer), "Media (%H:%M -- %d/%m)", &timeinfo);
+    Serial.println(timeBuffer);
+  }
+  else
+  {
+    Serial.println("Media (Hora não definida)");
+  }
+}
+
 void setup()
 {
   // Inicializa a comunicação serial
   Serial.begin(115200);
+
+  // Configura o Wi-Fi
+  WiFi.begin("VIVO43B-2G", "17182031");
+  Serial.print("Conectando ao Wi-Fi...");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print(".");
+    delay(1000);
+  }
+  Serial.println("Conectado ao Wi-Fi!");
+
+  // Configura o NTP para obter a hora; ajuste os offsets conforme sua região se necessário.
+  configTime(-3 * 3600, 0, "pool.ntp.org");
+
+  // Espera até a hora ser definida
+  struct tm timeinfo;
+  while (!getLocalTime(&timeinfo))
+  {
+    Serial.println("Aguardando sincronização do horário...");
+    delay(1000);
+  }
+
+  Serial.println("Hora sincronizada.");
   // Inicia o sensor DHT
   dht.begin();
 
@@ -76,7 +117,7 @@ void loop()
   // Imprimir somente a média móvel a cada 1 minuto
   if (millis() - lastPrintTime >= 60000)
   {
-    Serial.println("Média móvel (último 1 minuto): ");
+    printMediaTimestamp();
     Serial.println("-------------------------------------------------");
     Serial.print("Umidade: ");
     Serial.print(avgH);
