@@ -2,6 +2,7 @@
 #include <DHT.h>
 #include <time.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
 
 #define DHTPIN 4      // Pino digital conectado ao sensor
 #define DHTTYPE DHT22 // DHT 22 (AM2302). Para DHT11, use DHT11
@@ -22,24 +23,6 @@ void readSensorData(float &humidity, float &temperature)
   temperature = dht.readTemperature();
 }
 
-// Função para exibir os dados do sensor
-void printSensorData(float humidity, float temperature)
-{
-  if (isnan(humidity) || isnan(temperature))
-  {
-    Serial.println("Falha na leitura do sensor!");
-  }
-  else
-  {
-    Serial.print("Umidade: ");
-    Serial.print(humidity);
-    Serial.print(" %\t");
-    Serial.print("Temperatura: ");
-    Serial.print(temperature);
-    Serial.println(" *C");
-  }
-}
-
 void printMediaTimestamp()
 {
   struct tm timeinfo;
@@ -54,6 +37,33 @@ void printMediaTimestamp()
   {
     Serial.println("Media (Hora não definida)");
   }
+}
+
+void sendData(float avgH, float avgT)
+{
+  HTTPClient http;
+  // URL da sua API (substitua pela URL real)
+  http.begin("http://192.168.15.150:3000/api");
+  http.addHeader("Content-Type", "application/json");
+
+  // Monta o payload com os dados (você pode incluir o timestamp se desejar)
+  char jsonPayload[128];
+  sprintf(jsonPayload, "{\"humidity\":%.2f, \"temperature\":%.2f}", avgH, avgT);
+
+  int httpResponseCode = http.POST(jsonPayload);
+  if (httpResponseCode > 0)
+  {
+    Serial.print("Código de resposta HTTP: ");
+    Serial.println(httpResponseCode);
+    String response = http.getString();
+    Serial.println("Resposta: " + response);
+  }
+  else
+  {
+    Serial.print("Erro na requisição, código: ");
+    Serial.println(httpResponseCode);
+  }
+  http.end();
 }
 
 void setup()
@@ -125,6 +135,8 @@ void loop()
     Serial.print(avgT);
     Serial.println(" *C");
     lastPrintTime = millis();
+
+    sendData(avgH, avgT); // Envia os dados para a API
   }
 
   // Aguarda 1 segundos entre as leituras
